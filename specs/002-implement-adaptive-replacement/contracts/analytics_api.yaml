@@ -1,0 +1,420 @@
+openapi: 3.0.3
+info:
+  title: Cache Analytics API Contract
+  version: 1.0.0
+  description: API contract for real-time analytics dashboard and observability
+
+paths:
+  /cache/{cache_name}/analytics:
+    post:
+      summary: Configure analytics collection for cache
+      parameters:
+        - name: cache_name
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalyticsConfig'
+      responses:
+        '200':
+          description: Analytics configured successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsStatus'
+
+    get:
+      summary: Get real-time analytics data
+      parameters:
+        - name: cache_name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: time_range
+          in: query
+          schema:
+            type: string
+            enum: ["1h", "6h", "24h", "7d"]
+            default: "1h"
+      responses:
+        '200':
+          description: Analytics data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsData'
+
+  /cache/{cache_name}/metrics/prometheus:
+    get:
+      summary: Get Prometheus metrics exposition
+      parameters:
+        - name: cache_name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Prometheus metrics
+          content:
+            text/plain:
+              schema:
+                type: string
+                description: Prometheus exposition format
+
+  /cache/{cache_name}/traces:
+    get:
+      summary: Get distributed traces
+      parameters:
+        - name: cache_name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: trace_id
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+      responses:
+        '200':
+          description: Trace data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TraceData'
+
+  /cache/{cache_name}/alerts:
+    post:
+      summary: Configure alerting rules
+      parameters:
+        - name: cache_name
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertConfig'
+      responses:
+        '200':
+          description: Alerts configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertStatus'
+
+    get:
+      summary: Get active alerts
+      parameters:
+        - name: cache_name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Active alerts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertList'
+
+components:
+  schemas:
+    AnalyticsConfig:
+      type: object
+      properties:
+        metrics_enabled:
+          type: boolean
+          default: true
+        tracing_enabled:
+          type: boolean
+          default: true
+        sampling_rate:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+          default: 1.0
+        retention_hours:
+          type: integer
+          minimum: 1
+          maximum: 8760
+          default: 168
+        custom_dimensions:
+          type: array
+          items:
+            type: string
+        dashboard_config:
+          $ref: '#/components/schemas/DashboardConfig'
+
+    DashboardConfig:
+      type: object
+      properties:
+        grafana_enabled:
+          type: boolean
+          default: true
+        custom_panels:
+          type: array
+          items:
+            $ref: '#/components/schemas/PanelConfig'
+        refresh_interval_seconds:
+          type: integer
+          default: 30
+
+    PanelConfig:
+      type: object
+      properties:
+        panel_name:
+          type: string
+        panel_type:
+          type: string
+          enum: ["graph", "stat", "table", "heatmap"]
+        metrics:
+          type: array
+          items:
+            type: string
+
+    AnalyticsStatus:
+      type: object
+      properties:
+        metrics_active:
+          type: boolean
+        tracing_active:
+          type: boolean
+        data_points_collected:
+          type: integer
+        last_collection:
+          type: string
+          format: date-time
+        dashboard_url:
+          type: string
+
+    AnalyticsData:
+      type: object
+      properties:
+        summary:
+          $ref: '#/components/schemas/SummaryMetrics'
+        time_series:
+          $ref: '#/components/schemas/TimeSeriesData'
+        distribution:
+          $ref: '#/components/schemas/DistributionData'
+        anomalies:
+          type: array
+          items:
+            $ref: '#/components/schemas/Anomaly'
+
+    SummaryMetrics:
+      type: object
+      properties:
+        total_operations:
+          type: integer
+        hit_rate:
+          type: number
+        miss_rate:
+          type: number
+        avg_latency_ms:
+          type: number
+        p95_latency_ms:
+          type: number
+        p99_latency_ms:
+          type: number
+        error_rate:
+          type: number
+        throughput_ops_sec:
+          type: number
+
+    TimeSeriesData:
+      type: object
+      properties:
+        timestamps:
+          type: array
+          items:
+            type: string
+            format: date-time
+        hit_rates:
+          type: array
+          items:
+            type: number
+        latencies:
+          type: array
+          items:
+            type: number
+        throughput:
+          type: array
+          items:
+            type: number
+
+    DistributionData:
+      type: object
+      properties:
+        latency_buckets:
+          type: array
+          items:
+            $ref: '#/components/schemas/HistogramBucket'
+        key_size_distribution:
+          type: array
+          items:
+            $ref: '#/components/schemas/HistogramBucket'
+
+    HistogramBucket:
+      type: object
+      properties:
+        lower_bound:
+          type: number
+        upper_bound:
+          type: number
+        count:
+          type: integer
+
+    Anomaly:
+      type: object
+      properties:
+        anomaly_type:
+          type: string
+          enum: ["latency_spike", "hit_rate_drop", "error_increase", "throughput_drop"]
+        severity:
+          type: string
+          enum: ["low", "medium", "high", "critical"]
+        detected_at:
+          type: string
+          format: date-time
+        metric_value:
+          type: number
+        baseline_value:
+          type: number
+        confidence:
+          type: number
+
+    TraceData:
+      type: object
+      properties:
+        traces:
+          type: array
+          items:
+            $ref: '#/components/schemas/Trace'
+        total_count:
+          type: integer
+
+    Trace:
+      type: object
+      properties:
+        trace_id:
+          type: string
+        span_id:
+          type: string
+        operation_name:
+          type: string
+        start_time:
+          type: string
+          format: date-time
+        duration_ms:
+          type: number
+        tags:
+          type: object
+        child_spans:
+          type: array
+          items:
+            $ref: '#/components/schemas/Trace'
+
+    AlertConfig:
+      type: object
+      properties:
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlertRule'
+        notification_channels:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationChannel'
+
+    AlertRule:
+      type: object
+      required:
+        - rule_name
+        - metric
+        - condition
+        - threshold
+      properties:
+        rule_name:
+          type: string
+        metric:
+          type: string
+        condition:
+          type: string
+          enum: ["gt", "lt", "eq", "ne"]
+        threshold:
+          type: number
+        duration_minutes:
+          type: integer
+          default: 5
+        severity:
+          type: string
+          enum: ["low", "medium", "high", "critical"]
+
+    NotificationChannel:
+      type: object
+      required:
+        - channel_type
+        - config
+      properties:
+        channel_type:
+          type: string
+          enum: ["email", "slack", "webhook", "pagerduty"]
+        config:
+          type: object
+          description: Channel-specific configuration
+
+    AlertStatus:
+      type: object
+      properties:
+        total_rules:
+          type: integer
+        active_rules:
+          type: integer
+        last_evaluation:
+          type: string
+          format: date-time
+
+    AlertList:
+      type: object
+      properties:
+        alerts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActiveAlert'
+        total_count:
+          type: integer
+
+    ActiveAlert:
+      type: object
+      properties:
+        alert_id:
+          type: string
+        rule_name:
+          type: string
+        severity:
+          type: string
+        triggered_at:
+          type: string
+          format: date-time
+        current_value:
+          type: number
+        threshold:
+          type: number
+        message:
+          type: string

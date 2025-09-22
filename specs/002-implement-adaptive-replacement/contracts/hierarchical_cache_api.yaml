@@ -1,0 +1,215 @@
+openapi: 3.0.3
+info:
+  title: Hierarchical Cache API Contract
+  version: 1.0.0
+  description: API contract for multi-tier hierarchical caching operations
+
+paths:
+  /cache/{cache_name}/tiers:
+    post:
+      summary: Configure hierarchical cache tiers
+      parameters:
+        - name: cache_name
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TierConfiguration'
+      responses:
+        '200':
+          description: Tiers configured successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TierStatus'
+        '400':
+          description: Invalid tier configuration
+
+    get:
+      summary: Get tier status and utilization
+      parameters:
+        - name: cache_name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Tier status information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TierMetrics'
+
+  /cache/{cache_name}/tiers/{tier_level}/promote:
+    post:
+      summary: Manually promote data to higher tier
+      parameters:
+        - name: cache_name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: tier_level
+          in: path
+          required: true
+          schema:
+            type: integer
+            enum: [1, 2, 3]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PromotionRequest'
+      responses:
+        '200':
+          description: Promotion completed
+        '404':
+          description: Data not found in source tier
+
+components:
+  schemas:
+    TierConfiguration:
+      type: object
+      required:
+        - tiers
+      properties:
+        tiers:
+          type: array
+          items:
+            $ref: '#/components/schemas/TierConfig'
+        auto_promotion:
+          type: boolean
+          default: true
+        promotion_policy:
+          $ref: '#/components/schemas/PromotionPolicy'
+
+    TierConfig:
+      type: object
+      required:
+        - level
+        - backend_type
+        - capacity_gb
+      properties:
+        level:
+          type: integer
+          enum: [1, 2, 3]
+          description: Tier level (1=fastest, 3=slowest)
+        backend_type:
+          type: string
+          enum: ["memory", "redis", "s3", "azure_blob", "gcs"]
+        capacity_gb:
+          type: number
+          minimum: 0.1
+        connection_config:
+          type: object
+          description: Backend-specific configuration
+        cost_per_gb_month:
+          type: number
+          minimum: 0
+
+    PromotionPolicy:
+      type: object
+      properties:
+        access_frequency_threshold:
+          type: number
+          minimum: 0
+          description: Accesses per hour for promotion
+        cost_optimization:
+          type: boolean
+          default: true
+        promotion_delay_minutes:
+          type: integer
+          minimum: 0
+          default: 5
+
+    TierStatus:
+      type: object
+      properties:
+        total_tiers:
+          type: integer
+        active_tiers:
+          type: array
+          items:
+            type: integer
+        auto_promotion_enabled:
+          type: boolean
+
+    TierMetrics:
+      type: object
+      properties:
+        tier_utilization:
+          type: array
+          items:
+            $ref: '#/components/schemas/TierUtilization'
+        promotion_stats:
+          $ref: '#/components/schemas/PromotionStats'
+        cost_analysis:
+          $ref: '#/components/schemas/CostAnalysis'
+
+    TierUtilization:
+      type: object
+      properties:
+        tier_level:
+          type: integer
+        used_capacity_gb:
+          type: number
+        total_capacity_gb:
+          type: number
+        utilization_percentage:
+          type: number
+        entry_count:
+          type: integer
+        avg_access_latency_ms:
+          type: number
+
+    PromotionStats:
+      type: object
+      properties:
+        promotions_last_hour:
+          type: integer
+        demotions_last_hour:
+          type: integer
+        pending_promotions:
+          type: integer
+        failed_promotions:
+          type: integer
+
+    CostAnalysis:
+      type: object
+      properties:
+        total_cost_per_month:
+          type: number
+        cost_by_tier:
+          type: array
+          items:
+            type: object
+            properties:
+              tier_level:
+                type: integer
+              monthly_cost:
+                type: number
+        savings_potential:
+          type: number
+          description: Potential monthly savings with optimization
+
+    PromotionRequest:
+      type: object
+      required:
+        - keys
+      properties:
+        keys:
+          type: array
+          items:
+            type: string
+          description: Cache keys to promote
+        force:
+          type: boolean
+          default: false
+          description: Force promotion even if thresholds not met

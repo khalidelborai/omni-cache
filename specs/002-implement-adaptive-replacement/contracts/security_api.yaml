@@ -1,0 +1,296 @@
+openapi: 3.0.3
+info:
+  title: Cache Security API Contract
+  version: 1.0.0
+  description: API contract for zero-trust security and encryption features
+
+paths:
+  /cache/{cache_name}/security:
+    post:
+      summary: Configure security policies for cache
+      parameters:
+        - name: cache_name
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecurityConfig'
+      responses:
+        '200':
+          description: Security configured successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecurityStatus'
+        '400':
+          description: Invalid security configuration
+
+    get:
+      summary: Get security status and compliance information
+      parameters:
+        - name: cache_name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Security status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecurityMetrics'
+
+  /cache/{cache_name}/security/pii:
+    post:
+      summary: Scan cache for PII and apply policies
+      parameters:
+        - name: cache_name
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PIIScanRequest'
+      responses:
+        '200':
+          description: PII scan completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PIIScanResults'
+
+  /cache/{cache_name}/security/keys/rotate:
+    post:
+      summary: Trigger encryption key rotation
+      parameters:
+        - name: cache_name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '202':
+          description: Key rotation started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KeyRotationStatus'
+
+  /cache/{cache_name}/security/gdpr/forget:
+    post:
+      summary: Execute right to be forgotten (GDPR compliance)
+      parameters:
+        - name: cache_name
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForgetRequest'
+      responses:
+        '200':
+          description: Data forgotten successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForgetResult'
+
+components:
+  schemas:
+    SecurityConfig:
+      type: object
+      required:
+        - encryption_enabled
+      properties:
+        encryption_enabled:
+          type: boolean
+        encryption_algorithm:
+          type: string
+          enum: ["AES-256-GCM", "ChaCha20-Poly1305"]
+          default: "AES-256-GCM"
+        key_rotation_hours:
+          type: integer
+          minimum: 1
+          maximum: 8760
+          default: 168
+        pii_detection_enabled:
+          type: boolean
+          default: true
+        compliance_frameworks:
+          type: array
+          items:
+            type: string
+            enum: ["GDPR", "HIPAA", "PCI-DSS", "SOX"]
+        field_encryption_rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/FieldEncryptionRule'
+        audit_level:
+          type: string
+          enum: ["none", "basic", "detailed", "full"]
+          default: "basic"
+
+    FieldEncryptionRule:
+      type: object
+      required:
+        - field_pattern
+        - encryption_required
+      properties:
+        field_pattern:
+          type: string
+          description: Regex pattern for field matching
+        encryption_required:
+          type: boolean
+        pii_classification:
+          type: string
+          enum: ["email", "phone", "ssn", "credit_card", "custom"]
+
+    SecurityStatus:
+      type: object
+      properties:
+        encryption_enabled:
+          type: boolean
+        current_key_id:
+          type: string
+        key_age_hours:
+          type: number
+        next_rotation:
+          type: string
+          format: date-time
+        pii_detection_active:
+          type: boolean
+        compliance_status:
+          type: object
+
+    SecurityMetrics:
+      type: object
+      properties:
+        encrypted_entries:
+          type: integer
+        pii_detections:
+          type: integer
+        key_rotations:
+          type: integer
+        security_events:
+          type: integer
+        compliance_score:
+          type: number
+        last_audit:
+          type: string
+          format: date-time
+
+    PIIScanRequest:
+      type: object
+      properties:
+        scan_all:
+          type: boolean
+          default: true
+        key_patterns:
+          type: array
+          items:
+            type: string
+        apply_policies:
+          type: boolean
+          default: true
+
+    PIIScanResults:
+      type: object
+      properties:
+        scan_id:
+          type: string
+        total_entries_scanned:
+          type: integer
+        pii_found:
+          type: integer
+        pii_types:
+          type: array
+          items:
+            $ref: '#/components/schemas/PIIDetection'
+        actions_taken:
+          type: array
+          items:
+            type: string
+        scan_duration_ms:
+          type: number
+
+    PIIDetection:
+      type: object
+      properties:
+        pii_type:
+          type: string
+        confidence_score:
+          type: number
+        field_path:
+          type: string
+        action_taken:
+          type: string
+          enum: ["encrypted", "masked", "flagged", "removed"]
+
+    KeyRotationStatus:
+      type: object
+      properties:
+        rotation_id:
+          type: string
+        status:
+          type: string
+          enum: ["started", "in_progress", "completed", "failed"]
+        old_key_id:
+          type: string
+        new_key_id:
+          type: string
+        progress_percentage:
+          type: number
+        estimated_completion:
+          type: string
+          format: date-time
+
+    ForgetRequest:
+      type: object
+      required:
+        - subject_id
+      properties:
+        subject_id:
+          type: string
+          description: Identifier for data subject (user ID, email, etc.)
+        data_categories:
+          type: array
+          items:
+            type: string
+          description: Specific data categories to forget
+        verification_token:
+          type: string
+          description: Token verifying legitimate request
+
+    ForgetResult:
+      type: object
+      properties:
+        request_id:
+          type: string
+        status:
+          type: string
+          enum: ["completed", "partial", "failed"]
+        entries_removed:
+          type: integer
+        entries_anonymized:
+          type: integer
+        completion_time:
+          type: string
+          format: date-time
+        retention_exceptions:
+          type: array
+          items:
+            type: string
+          description: Data retained for legal/compliance reasons

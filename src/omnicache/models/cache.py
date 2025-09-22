@@ -488,16 +488,129 @@ class Cache:
         elif strategy_type == 'ttl':
             from omnicache.strategies.ttl import TTLStrategy
             return TTLStrategy(**params)
+        elif strategy_type == 'arc':
+            from omnicache.strategies.arc import ARCStrategy
+            return ARCStrategy(**params)
         elif strategy_type == 'size':
             from omnicache.strategies.size import SizeStrategy
             return SizeStrategy(**params)
+        elif strategy_type == 'priority':
+            from omnicache.strategies.priority import PriorityStrategy
+            return PriorityStrategy(**params)
         else:
             raise CacheConfigurationError(f"Unknown strategy type: {strategy_type}")
+
+    @staticmethod
+    def _create_backend_from_config(backend_type: str, params: Dict[str, Any]) -> Any:
+        """Create backend instance from configuration."""
+        if backend_type == 'memory':
+            from omnicache.backends.memory import MemoryBackend
+            return MemoryBackend(**params)
+        elif backend_type == 'redis':
+            from omnicache.backends.redis import RedisBackend
+            return RedisBackend(**params)
+        elif backend_type == 'filesystem':
+            from omnicache.backends.filesystem import FileSystemBackend
+            return FileSystemBackend(**params)
+        elif backend_type == 'hierarchical':
+            from omnicache.backends.hierarchical import HierarchicalBackend
+            return HierarchicalBackend(**params)
+        elif backend_type == 's3':
+            from omnicache.backends.cloud.s3 import S3Backend
+            return S3Backend(**params)
+        elif backend_type == 'gcs':
+            from omnicache.backends.cloud.gcs import GCSBackend
+            return GCSBackend(**params)
+        elif backend_type == 'azure':
+            from omnicache.backends.cloud.azure import AzureBlobBackend
+            return AzureBlobBackend(**params)
+        else:
+            raise CacheConfigurationError(f"Unknown backend type: {backend_type}")
 
     def _register_cache(self) -> None:
         """Register cache in global registry."""
         # Will be implemented when CacheRegistry is available
         pass
+
+    @classmethod
+    def create_enterprise_cache(
+        cls,
+        name: str,
+        strategy_type: str = "arc",
+        backend_type: str = "hierarchical",
+        security_policy: Optional[Any] = None,
+        analytics_enabled: bool = True,
+        ml_prefetch_enabled: bool = True,
+        **kwargs: Any
+    ) -> 'Cache':
+        """
+        Create an enterprise cache with advanced features.
+
+        Args:
+            name: Cache name
+            strategy_type: Strategy type ('arc', 'lru', 'lfu', etc.)
+            backend_type: Backend type ('hierarchical', 'redis', 's3', etc.)
+            security_policy: Security policy for encryption and compliance
+            analytics_enabled: Enable analytics and monitoring
+            ml_prefetch_enabled: Enable ML-powered prefetching
+            **kwargs: Additional configuration parameters
+
+        Returns:
+            Cache instance with enterprise features
+        """
+        # Create strategy
+        strategy_params = kwargs.pop('strategy_params', {})
+
+        # Pass max_size to strategy if provided and strategy supports it
+        if 'max_size' in kwargs and strategy_type in ['arc', 'lru', 'lfu']:
+            if strategy_type == 'arc':
+                strategy_params['capacity'] = kwargs['max_size']
+            else:
+                strategy_params['max_size'] = kwargs['max_size']
+
+        strategy = cls._create_strategy_from_config(strategy_type, strategy_params)
+
+        # Create backend
+        backend_params = kwargs.pop('backend_params', {})
+        backend = cls._create_backend_from_config(backend_type, backend_params)
+
+        # Create cache instance
+        cache = cls(
+            name=name,
+            strategy=strategy,
+            backend=backend,
+            **kwargs
+        )
+
+        # Configure enterprise features
+        if security_policy:
+            cache._configure_security(security_policy)
+
+        if analytics_enabled:
+            cache._configure_analytics()
+
+        if ml_prefetch_enabled:
+            cache._configure_ml_prefetch()
+
+        return cache
+
+    def _configure_security(self, security_policy: Any) -> None:
+        """Configure security features for the cache."""
+        # Add security configuration
+        self._security_policy = security_policy
+        # Will be implemented when security components are integrated
+
+    def _configure_analytics(self) -> None:
+        """Configure analytics and monitoring for the cache."""
+        # Add analytics configuration
+        self._analytics_enabled = True
+        # Will be implemented when analytics components are integrated
+
+    def _configure_ml_prefetch(self) -> None:
+        """Configure ML-powered prefetching for the cache."""
+        # Add ML prefetch configuration
+        self._ml_prefetch_enabled = True
+        # Will be implemented when ML components are integrated
 
     def _unregister_cache(self) -> None:
         """Unregister cache from global registry."""

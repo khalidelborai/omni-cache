@@ -21,7 +21,7 @@ class TestFastAPIIntegration:
 
         # Function-level caching
         @app.get("/users/{user_id}")
-        @cache(cache_name="user_cache", ttl=1800)
+        @cache(cache_name="integration_user_cache", ttl=1800)
         async def get_user(user_id: int):
             return {"user_id": user_id, "name": f"User {user_id}", "cached": False}
 

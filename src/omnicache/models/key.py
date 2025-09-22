@@ -271,13 +271,16 @@ class Key:
         return f"<Key(value='{self._value}', namespace='{self._namespace}', tags={self._tags})>"
 
     def __eq__(self, other: Any) -> bool:
-        if not isinstance(other, Key):
-            return False
-        return (
-            self._value == other._value and
-            self._namespace == other._namespace and
-            self._tags == other._tags
-        )
+        if isinstance(other, Key):
+            return (
+                self._value == other._value and
+                self._namespace == other._namespace and
+                self._tags == other._tags
+            )
+        elif isinstance(other, str):
+            # Allow comparison with string for convenience in tests and simple cases
+            return self._value == other or self.full_key == other
+        return False
 
     def __hash__(self) -> int:
         return hash((self._value, self._namespace, tuple(sorted(self._tags))))

@@ -1,0 +1,365 @@
+cli_specification:
+  name: omnicache
+  description: Command-line interface for OmniCache library
+  version: 1.0.0
+
+commands:
+  - name: cache
+    description: Cache instance management
+    subcommands:
+      - name: create
+        description: Create new cache instance
+        usage: omnicache cache create [OPTIONS] <name>
+        arguments:
+          - name: name
+            type: string
+            required: true
+            description: Cache instance name
+        options:
+          - name: --strategy
+            type: choice
+            choices: [lru, lfu, ttl, size, custom]
+            default: lru
+            description: Eviction strategy
+          - name: --max-size
+            type: integer
+            description: Maximum number of entries
+          - name: --default-ttl
+            type: float
+            description: Default TTL in seconds
+          - name: --namespace
+            type: string
+            description: Cache namespace
+          - name: --backend
+            type: choice
+            choices: [memory, redis, filesystem]
+            default: memory
+            description: Storage backend
+          - name: --config
+            type: string
+            description: Backend configuration JSON
+        examples:
+          - command: omnicache cache create web-cache --strategy lru --max-size 1000
+            description: Create LRU cache with 1000 entry limit
+          - command: omnicache cache create api-cache --backend redis --config '{"host":"localhost","port":6379}'
+            description: Create Redis-backed cache
+
+      - name: list
+        description: List all cache instances
+        usage: omnicache cache list [OPTIONS]
+        options:
+          - name: --namespace
+            type: string
+            description: Filter by namespace
+          - name: --format
+            type: choice
+            choices: [table, json, yaml]
+            default: table
+            description: Output format
+        examples:
+          - command: omnicache cache list --format json
+            description: List caches in JSON format
+
+      - name: info
+        description: Show cache information
+        usage: omnicache cache info [OPTIONS] <name>
+        arguments:
+          - name: name
+            type: string
+            required: true
+            description: Cache instance name
+        options:
+          - name: --format
+            type: choice
+            choices: [table, json, yaml]
+            default: table
+            description: Output format
+        examples:
+          - command: omnicache cache info web-cache
+            description: Show detailed cache information
+
+      - name: delete
+        description: Delete cache instance
+        usage: omnicache cache delete [OPTIONS] <name>
+        arguments:
+          - name: name
+            type: string
+            required: true
+            description: Cache instance name
+        options:
+          - name: --force
+            type: flag
+            description: Skip confirmation prompt
+        examples:
+          - command: omnicache cache delete web-cache --force
+            description: Delete cache without confirmation
+
+  - name: entry
+    description: Cache entry operations
+    subcommands:
+      - name: get
+        description: Retrieve cache entry
+        usage: omnicache entry get [OPTIONS] <cache> <key>
+        arguments:
+          - name: cache
+            type: string
+            required: true
+            description: Cache instance name
+          - name: key
+            type: string
+            required: true
+            description: Entry key
+        options:
+          - name: --format
+            type: choice
+            choices: [raw, json, pretty]
+            default: raw
+            description: Output format
+        examples:
+          - command: omnicache entry get web-cache user:123
+            description: Get entry with key "user:123"
+
+      - name: set
+        description: Store cache entry
+        usage: omnicache entry set [OPTIONS] <cache> <key> <value>
+        arguments:
+          - name: cache
+            type: string
+            required: true
+            description: Cache instance name
+          - name: key
+            type: string
+            required: true
+            description: Entry key
+          - name: value
+            type: string
+            required: true
+            description: Entry value (JSON string for complex types)
+        options:
+          - name: --ttl
+            type: float
+            description: TTL in seconds
+          - name: --tags
+            type: string
+            description: Comma-separated tags
+          - name: --priority
+            type: float
+            description: Entry priority (0.0-1.0)
+        examples:
+          - command: omnicache entry set web-cache user:123 '{"name":"John","age":30}' --ttl 3600
+            description: Store user data with 1-hour TTL
+
+      - name: delete
+        description: Remove cache entry
+        usage: omnicache entry delete [OPTIONS] <cache> <key>
+        arguments:
+          - name: cache
+            type: string
+            required: true
+            description: Cache instance name
+          - name: key
+            type: string
+            required: true
+            description: Entry key
+        options:
+          - name: --force
+            type: flag
+            description: Skip confirmation prompt
+        examples:
+          - command: omnicache entry delete web-cache user:123
+            description: Remove specific entry
+
+      - name: list
+        description: List cache entries
+        usage: omnicache entry list [OPTIONS] <cache>
+        arguments:
+          - name: cache
+            type: string
+            required: true
+            description: Cache instance name
+        options:
+          - name: --pattern
+            type: string
+            description: Key pattern filter
+          - name: --tags
+            type: string
+            description: Comma-separated tag filter
+          - name: --limit
+            type: integer
+            default: 100
+            description: Maximum entries to show
+          - name: --format
+            type: choice
+            choices: [table, json, keys-only]
+            default: table
+            description: Output format
+        examples:
+          - command: omnicache entry list web-cache --pattern "user:*" --limit 50
+            description: List user entries with pattern filter
+
+  - name: clear
+    description: Clear cache entries
+    usage: omnicache clear [OPTIONS] <cache>
+    arguments:
+      - name: cache
+        type: string
+        required: true
+        description: Cache instance name
+    options:
+      - name: --pattern
+        type: string
+        description: Key pattern for selective clearing
+      - name: --tags
+        type: string
+        description: Comma-separated tags for selective clearing
+      - name: --force
+        type: flag
+        description: Skip confirmation prompt
+    examples:
+      - command: omnicache clear web-cache --pattern "temp:*"
+        description: Clear entries matching pattern
+      - command: omnicache clear web-cache --tags "session,expired"
+        description: Clear entries with specific tags
+
+  - name: stats
+    description: Show cache statistics
+    usage: omnicache stats [OPTIONS] <cache>
+    arguments:
+      - name: cache
+        type: string
+        required: true
+        description: Cache instance name
+    options:
+      - name: --format
+        type: choice
+        choices: [table, json, prometheus]
+        default: table
+        description: Output format
+      - name: --watch
+        type: flag
+        description: Continuously update statistics
+      - name: --interval
+        type: integer
+        default: 5
+        description: Update interval in seconds (with --watch)
+    examples:
+      - command: omnicache stats web-cache --format json
+        description: Get statistics in JSON format
+      - command: omnicache stats web-cache --watch --interval 2
+        description: Watch statistics with 2-second updates
+
+  - name: warm
+    description: Cache warming operations
+    usage: omnicache warm [OPTIONS] <cache>
+    arguments:
+      - name: cache
+        type: string
+        required: true
+        description: Cache instance name
+    options:
+      - name: --file
+        type: string
+        description: JSON file with key-value pairs
+      - name: --source
+        type: choice
+        choices: [database, api, file]
+        description: Data source for warming
+      - name: --config
+        type: string
+        description: Source configuration JSON
+      - name: --batch-size
+        type: integer
+        default: 100
+        description: Batch size for warming operations
+    examples:
+      - command: omnicache warm web-cache --file warm-data.json
+        description: Warm cache from JSON file
+      - command: omnicache warm web-cache --source database --config '{"table":"users"}'
+        description: Warm cache from database table
+
+  - name: monitor
+    description: Real-time cache monitoring
+    usage: omnicache monitor [OPTIONS] [cache]
+    arguments:
+      - name: cache
+        type: string
+        required: false
+        description: Cache instance name (all caches if omitted)
+    options:
+      - name: --format
+        type: choice
+        choices: [dashboard, json, logs]
+        default: dashboard
+        description: Monitor display format
+      - name: --refresh
+        type: integer
+        default: 1
+        description: Refresh interval in seconds
+      - name: --threshold
+        type: float
+        description: Alert threshold for hit rate
+    examples:
+      - command: omnicache monitor web-cache
+        description: Monitor specific cache
+      - command: omnicache monitor --threshold 0.8
+        description: Monitor all caches with hit rate alerts
+
+global_options:
+  - name: --config
+    type: string
+    description: Configuration file path
+  - name: --verbose
+    type: flag
+    description: Verbose output
+  - name: --quiet
+    type: flag
+    description: Suppress non-error output
+  - name: --help
+    type: flag
+    description: Show help message
+
+output_formats:
+  table:
+    description: Human-readable table format
+    content_type: text/plain
+  json:
+    description: JSON format for programmatic use
+    content_type: application/json
+  yaml:
+    description: YAML format for configuration
+    content_type: application/yaml
+  prometheus:
+    description: Prometheus metrics format
+    content_type: text/plain
+  raw:
+    description: Raw value without formatting
+    content_type: text/plain
+
+error_handling:
+  exit_codes:
+    0: Success
+    1: General error
+    2: Command line usage error
+    3: Cache not found
+    4: Entry not found
+    5: Permission denied
+    6: Backend connection error
+    7: Configuration error
+    8: Validation error
+
+  error_format:
+    structure: |
+      {
+        "error": "ERROR_CODE",
+        "message": "Human-readable message",
+        "details": {},
+        "timestamp": "2025-09-22T10:30:00Z"
+      }
+
+stdin_support:
+  - command: entry set
+    description: Accept value from stdin if not provided as argument
+    example: echo '{"data": "value"}' | omnicache entry set web-cache key:1
+  - command: warm
+    description: Accept warming data from stdin
+    example: cat data.json | omnicache warm web-cache

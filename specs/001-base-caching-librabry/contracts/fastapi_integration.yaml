@@ -1,0 +1,418 @@
+fastapi_integration:
+  name: OmniCache FastAPI Integration
+  description: FastAPI middleware and decorators for seamless caching
+  version: 1.0.0
+
+decorators:
+  - name: cache
+    description: Function-level caching decorator
+    usage: |
+      from omnicache.integrations.fastapi import cache
+
+      @cache(cache_name="api_cache", ttl=300)
+      async def get_user(user_id: int):
+          return await fetch_user_from_db(user_id)
+
+    parameters:
+      - name: cache_name
+        type: string
+        required: false
+        default: "default"
+        description: Cache instance name
+      - name: key_prefix
+        type: string
+        required: false
+        description: Prefix for cache keys
+      - name: ttl
+        type: float
+        required: false
+        description: Time-to-live in seconds
+      - name: tags
+        type: list[string]
+        required: false
+        description: Tags for bulk operations
+      - name: key_builder
+        type: callable
+        required: false
+        description: Custom key generation function
+      - name: condition
+        type: callable
+        required: false
+        description: Conditional caching function
+      - name: serializer
+        type: string
+        required: false
+        choices: [json, pickle, custom]
+        default: json
+        description: Serialization method
+
+    examples:
+      - description: Basic function caching
+        code: |
+          @cache(ttl=600)
+          async def expensive_computation(param1: str, param2: int):
+              return await complex_operation(param1, param2)
+
+      - description: Custom key builder
+        code: |
+          def user_key_builder(user_id: int, include_profile: bool = False):
+              return f"user:{user_id}:profile:{include_profile}"
+
+          @cache(key_builder=user_key_builder, ttl=1800)
+          async def get_user_data(user_id: int, include_profile: bool = False):
+              return await fetch_user_data(user_id, include_profile)
+
+      - description: Conditional caching
+        code: |
+          @cache(condition=lambda result: result is not None)
+          async def get_optional_data(key: str):
+              return await optional_fetch(key)
+
+  - name: cache_response
+    description: HTTP response caching decorator
+    usage: |
+      from omnicache.integrations.fastapi import cache_response
+
+      @app.get("/users/{user_id}")
+      @cache_response(ttl=300, vary_on=["user_id"])
+      async def get_user_endpoint(user_id: int):
+          return {"user_id": user_id, "name": "John"}
+
+    parameters:
+      - name: cache_name
+        type: string
+        required: false
+        default: "http_cache"
+        description: Cache instance name
+      - name: ttl
+        type: float
+        required: false
+        description: Time-to-live in seconds
+      - name: vary_on
+        type: list[string]
+        required: false
+        description: Parameters to include in cache key
+      - name: vary_headers
+        type: list[string]
+        required: false
+        description: Headers to include in cache key
+      - name: status_codes
+        type: list[int]
+        required: false
+        default: [200]
+        description: HTTP status codes to cache
+      - name: exclude_headers
+        type: list[string]
+        required: false
+        description: Headers to exclude from cached response
+
+    examples:
+      - description: Basic response caching
+        code: |
+          @app.get("/products/{product_id}")
+          @cache_response(ttl=1800, vary_on=["product_id"])
+          async def get_product(product_id: int):
+              return await product_service.get(product_id)
+
+      - description: Header-based variation
+        code: |
+          @app.get("/content")
+          @cache_response(ttl=600, vary_headers=["Accept-Language"])
+          async def get_localized_content(request: Request):
+              lang = request.headers.get("Accept-Language", "en")
+              return await content_service.get_content(lang)
+
+middleware:
+  - name: CacheMiddleware
+    description: Request/response caching middleware
+    usage: |
+      from omnicache.integrations.fastapi import CacheMiddleware
+
+      app.add_middleware(
+          CacheMiddleware,
+          cache_name="request_cache",
+          default_ttl=300,
+          cache_control_header=True
+      )
+
+    parameters:
+      - name: cache_name
+        type: string
+        required: false
+        default: "middleware_cache"
+        description: Cache instance name
+      - name: default_ttl
+        type: float
+        required: false
+        default: 300
+        description: Default TTL for cached responses
+      - name: cache_control_header
+        type: bool
+        required: false
+        default: True
+        description: Add Cache-Control headers to responses
+      - name: etag_header
+        type: bool
+        required: false
+        default: True
+        description: Add ETag headers for conditional requests
+      - name: key_builder
+        type: callable
+        required: false
+        description: Custom request key builder
+      - name: should_cache
+        type: callable
+        required: false
+        description: Function to determine if request should be cached
+      - name: exclude_paths
+        type: list[string]
+        required: false
+        description: Paths to exclude from caching
+      - name: include_query_params
+        type: list[string]
+        required: false
+        description: Query parameters to include in cache key
+
+    behavior:
+      request_processing: |
+        1. Generate cache key from request method, path, headers, and query parameters
+        2. Check cache for existing response
+        3. If found and not expired, return cached response with appropriate headers
+        4. If not found, proceed to route handler
+
+      response_processing: |
+        1. Store response in cache if conditions are met
+        2. Add cache headers (Cache-Control, ETag, Last-Modified)
+        3. Return response to client
+
+      conditional_requests: |
+        1. Handle If-None-Match (ETag) headers
+        2. Handle If-Modified-Since headers
+        3. Return 304 Not Modified when appropriate
+
+    examples:
+      - description: Basic middleware setup
+        code: |
+          app.add_middleware(
+              CacheMiddleware,
+              cache_name="api_cache",
+              default_ttl=600,
+              exclude_paths=["/health", "/metrics"]
+          )
+
+      - description: Custom caching logic
+        code: |
+          def should_cache_request(request: Request) -> bool:
+              return (
+                  request.method == "GET" and
+                  "no-cache" not in request.headers.get("Cache-Control", "") and
+                  request.url.path.startswith("/api/")
+              )
+
+          app.add_middleware(
+              CacheMiddleware,
+              should_cache=should_cache_request,
+              include_query_params=["version", "format"]
+          )
+
+dependencies:
+  - name: cache_dependency
+    description: Dependency injection for cache instances
+    usage: |
+      from omnicache.integrations.fastapi import cache_dependency
+
+      @app.get("/users/{user_id}")
+      async def get_user(
+          user_id: int,
+          cache: Cache = Depends(cache_dependency("user_cache"))
+      ):
+          cached_user = await cache.get(f"user:{user_id}")
+          if cached_user:
+              return cached_user
+
+          user = await fetch_user(user_id)
+          await cache.set(f"user:{user_id}", user, ttl=1800)
+          return user
+
+    parameters:
+      - name: cache_name
+        type: string
+        required: false
+        default: "default"
+        description: Cache instance name
+      - name: create_if_missing
+        type: bool
+        required: false
+        default: True
+        description: Create cache if it doesn't exist
+
+    examples:
+      - description: Multiple cache dependencies
+        code: |
+          @app.post("/process")
+          async def process_data(
+              data: ProcessRequest,
+              user_cache: Cache = Depends(cache_dependency("users")),
+              session_cache: Cache = Depends(cache_dependency("sessions"))
+          ):
+              user = await user_cache.get(f"user:{data.user_id}")
+              session = await session_cache.get(f"session:{data.session_id}")
+              return await process_with_cache_data(data, user, session)
+
+configuration:
+  cache_config:
+    description: FastAPI-specific cache configuration
+    schema:
+      type: object
+      properties:
+        integrations:
+          type: object
+          properties:
+            fastapi:
+              type: object
+              properties:
+                default_cache:
+                  type: string
+                  description: Default cache instance name
+                response_cache_ttl:
+                  type: integer
+                  description: Default response cache TTL
+                middleware_enabled:
+                  type: boolean
+                  description: Enable middleware by default
+                decorator_cache_ttl:
+                  type: integer
+                  description: Default decorator cache TTL
+                cache_control_headers:
+                  type: boolean
+                  description: Add Cache-Control headers
+                etag_headers:
+                  type: boolean
+                  description: Add ETag headers
+
+    example: |
+      cache_config = {
+          "integrations": {
+              "fastapi": {
+                  "default_cache": "api_cache",
+                  "response_cache_ttl": 300,
+                  "middleware_enabled": True,
+                  "decorator_cache_ttl": 600,
+                  "cache_control_headers": True,
+                  "etag_headers": True
+              }
+          }
+      }
+
+utilities:
+  - name: invalidate_cache
+    description: Cache invalidation utilities
+    usage: |
+      from omnicache.integrations.fastapi import invalidate_cache
+
+      @app.post("/users/{user_id}")
+      async def update_user(user_id: int, user_data: UserUpdate):
+          updated_user = await user_service.update(user_id, user_data)
+          await invalidate_cache(
+              cache_name="user_cache",
+              keys=[f"user:{user_id}"],
+              tags=["user_data"]
+          )
+          return updated_user
+
+    parameters:
+      - name: cache_name
+        type: string
+        required: true
+        description: Cache instance name
+      - name: keys
+        type: list[string]
+        required: false
+        description: Specific keys to invalidate
+      - name: patterns
+        type: list[string]
+        required: false
+        description: Key patterns to invalidate
+      - name: tags
+        type: list[string]
+        required: false
+        description: Tags to invalidate
+
+  - name: cache_stats
+    description: Cache statistics utilities
+    usage: |
+      from omnicache.integrations.fastapi import cache_stats
+
+      @app.get("/admin/cache-stats")
+      async def get_cache_statistics():
+          return await cache_stats(cache_name="api_cache")
+
+error_handling:
+  cache_miss_behavior:
+    description: How to handle cache misses
+    options:
+      - transparent: Continue to original function/endpoint
+      - logged: Log cache miss events
+      - metrics: Increment miss counters
+
+  cache_error_behavior:
+    description: How to handle cache backend errors
+    options:
+      - graceful_degradation: Continue without caching
+      - circuit_breaker: Temporarily disable caching
+      - fail_fast: Raise exceptions immediately
+
+  serialization_errors:
+    description: How to handle serialization failures
+    options:
+      - skip_cache: Don't cache unsupported types
+      - fallback_serializer: Use alternative serialization
+      - log_and_continue: Log error and proceed
+
+testing:
+  test_utilities:
+    - name: MockCache
+      description: Mock cache for testing
+      usage: |
+        from omnicache.testing import MockCache
+
+        def test_cached_function():
+            with MockCache() as mock_cache:
+                result = await cached_function()
+                assert mock_cache.get_call_count("cache_key") == 1
+
+    - name: CacheTestClient
+      description: TestClient with cache inspection
+      usage: |
+        from omnicache.testing import CacheTestClient
+
+        def test_cached_endpoint():
+            client = CacheTestClient(app)
+            response = client.get("/api/users/1")
+            assert response.status_code == 200
+            assert client.cache_hit_count("http_cache") == 0
+
+            response = client.get("/api/users/1")
+            assert client.cache_hit_count("http_cache") == 1
+
+performance_considerations:
+  async_compatibility:
+    description: Full async/await support for FastAPI applications
+    details:
+      - Non-blocking cache operations
+      - Concurrent request handling
+      - Background cache warming
+
+  memory_usage:
+    description: Efficient memory usage patterns
+    details:
+      - Lazy loading of cache instances
+      - Automatic cleanup of expired entries
+      - Memory-mapped file backends for large datasets
+
+  serialization_overhead:
+    description: Minimize serialization costs
+    details:
+      - Fast JSON serialization for simple types
+      - Efficient pickle serialization for complex objects
+      - Custom serializers for domain-specific optimizations

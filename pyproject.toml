@@ -23,6 +23,7 @@ classifiers = [
 ]
 requires-python = ">=3.11"
 dependencies = [
+    "redis>=6.4.0",
     "typing-extensions>=4.5.0",
 ]
 

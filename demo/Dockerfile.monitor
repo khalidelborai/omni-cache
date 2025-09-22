@@ -1,0 +1,15 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install dependencies
+RUN pip install prometheus-client requests httpx psutil matplotlib
+
+# Copy monitoring script
+COPY demo/cache_monitor.py .
+
+# Expose metrics port
+EXPOSE 8080
+
+# Run cache monitor
+CMD ["python", "cache_monitor.py"]

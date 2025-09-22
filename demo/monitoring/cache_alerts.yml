@@ -1,0 +1,65 @@
+groups:
+  - name: omnicache_alerts
+    rules:
+      - alert: CacheHitRateLow
+        expr: omnicache_hit_ratio < 0.5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Cache hit ratio is low"
+          description: "Cache {{ $labels.cache_name }} has hit ratio {{ $value }} which is below 50%"
+
+      - alert: CacheHitRateCritical
+        expr: omnicache_hit_ratio < 0.2
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Cache hit ratio is critically low"
+          description: "Cache {{ $labels.cache_name }} has hit ratio {{ $value }} which is critically low"
+
+      - alert: CacheHighLatency
+        expr: omnicache_operation_duration_seconds > 0.1
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Cache operation latency is high"
+          description: "Cache {{ $labels.cache_name }} operation latency is {{ $value }}s"
+
+      - alert: CacheMemoryUsageHigh
+        expr: omnicache_memory_usage_ratio > 0.9
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Cache memory usage is high"
+          description: "Cache {{ $labels.cache_name }} memory usage is {{ $value * 100 }}%"
+
+      - alert: CacheErrorRateHigh
+        expr: rate(omnicache_errors_total[5m]) > 0.1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Cache error rate is high"
+          description: "Cache {{ $labels.cache_name }} error rate is {{ $value }} errors/sec"
+
+      - alert: MLPredictionAccuracyLow
+        expr: omnicache_ml_prediction_accuracy < 0.7
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ML prediction accuracy is low"
+          description: "ML prediction accuracy for cache {{ $labels.cache_name }} is {{ $value * 100 }}%"
+
+      - alert: SecurityViolationDetected
+        expr: increase(omnicache_security_violations_total[1m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Security violation detected"
+          description: "{{ $value }} security violations detected in cache {{ $labels.cache_name }}"

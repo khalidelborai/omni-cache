@@ -1,0 +1,167 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "OmniCache Enterprise Dashboard",
+    "tags": ["omnicache", "caching", "enterprise"],
+    "style": "dark",
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Cache Hit Ratio",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "omnicache_hit_ratio",
+            "legendFormat": "{{cache_name}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percentunit",
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 0.5},
+                {"color": "green", "value": 0.8}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 6, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "Operations per Second",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(omnicache_operations_total[1m])",
+            "legendFormat": "{{cache_name}} {{operation}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 6, "y": 0}
+      },
+      {
+        "id": 3,
+        "title": "Cache Size",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "omnicache_current_size",
+            "legendFormat": "{{cache_name}} Current"
+          },
+          {
+            "expr": "omnicache_max_size",
+            "legendFormat": "{{cache_name}} Max"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 6, "x": 18, "y": 0}
+      },
+      {
+        "id": 4,
+        "title": "ARC Strategy Performance",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "omnicache_arc_t1_hits",
+            "legendFormat": "T1 Hits"
+          },
+          {
+            "expr": "omnicache_arc_t2_hits",
+            "legendFormat": "T2 Hits"
+          },
+          {
+            "expr": "omnicache_arc_adaptations",
+            "legendFormat": "Adaptations"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+      },
+      {
+        "id": 5,
+        "title": "ML Prediction Accuracy",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "omnicache_ml_prediction_accuracy",
+            "legendFormat": "{{cache_name}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percentunit",
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 0.6},
+                {"color": "green", "value": 0.8}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 6, "x": 12, "y": 8}
+      },
+      {
+        "id": 6,
+        "title": "Security Events",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(omnicache_security_events_total[5m])",
+            "legendFormat": "{{event_type}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 6, "x": 18, "y": 8}
+      },
+      {
+        "id": 7,
+        "title": "Response Time Distribution",
+        "type": "heatmap",
+        "targets": [
+          {
+            "expr": "rate(omnicache_operation_duration_seconds_bucket[5m])",
+            "legendFormat": "{{le}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16}
+      },
+      {
+        "id": 8,
+        "title": "Hierarchical Tier Performance",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "omnicache_tier_hit_ratio",
+            "legendFormat": "{{tier_name}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24}
+      },
+      {
+        "id": 9,
+        "title": "Memory Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "omnicache_memory_usage_bytes",
+            "legendFormat": "{{cache_name}}"
+          }
+        ],
+        "yAxes": [
+          {
+            "unit": "bytes"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24}
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "5s",
+    "schemaVersion": 30,
+    "version": 1
+  }
+}

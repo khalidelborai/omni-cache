@@ -1,0 +1,43 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # OmniCache Demo Application
+  - job_name: 'omnicache-demo'
+    static_configs:
+      - targets: ['omnicache-demo:8000']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  # Redis metrics (if redis_exporter is added)
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+    scrape_interval: 15s
+
+  # Cache Monitor
+  - job_name: 'cache-monitor'
+    static_configs:
+      - targets: ['cache-monitor:8080']
+    scrape_interval: 30s
+
+# Alerting rules for cache performance
+rule_files:
+  - "cache_alerts.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - alertmanager:9093

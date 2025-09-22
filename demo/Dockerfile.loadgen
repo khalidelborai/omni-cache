@@ -1,0 +1,12 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install dependencies
+RUN pip install locust httpx faker
+
+# Copy load generation script
+COPY demo/load_generator.py .
+
+# Run load generator
+CMD ["locust", "-f", "load_generator.py", "--host", "${TARGET_URL}", "--headless", "-u", "${CONCURRENT_USERS}", "-r", "${REQUESTS_PER_SECOND}", "-t", "300s"]

@@ -1,0 +1,463 @@
+openapi: 3.0.3
+info:
+  title: OmniCache Core API
+  description: Core caching library API contracts for cache operations
+  version: 1.0.0
+
+paths:
+  /cache:
+    post:
+      summary: Create new cache instance
+      operationId: createCache
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCacheRequest'
+      responses:
+        '201':
+          description: Cache created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CacheResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Cache already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      summary: List all cache instances
+      operationId: listCaches
+      parameters:
+        - name: namespace
+          in: query
+          description: Filter by namespace
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of caches
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CacheResponse'
+
+  /cache/{cacheName}:
+    get:
+      summary: Get cache information
+      operationId: getCache
+      parameters:
+        - $ref: '#/components/parameters/CacheName'
+      responses:
+        '200':
+          description: Cache information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CacheResponse'
+        '404':
+          description: Cache not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      summary: Delete cache instance
+      operationId: deleteCache
+      parameters:
+        - $ref: '#/components/parameters/CacheName'
+      responses:
+        '204':
+          description: Cache deleted successfully
+        '404':
+          description: Cache not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /cache/{cacheName}/entries:
+    post:
+      summary: Store cache entry
+      operationId: setCacheEntry
+      parameters:
+        - $ref: '#/components/parameters/CacheName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetEntryRequest'
+      responses:
+        '201':
+          description: Entry stored successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CacheEntryResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Cache not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /cache/{cacheName}/entries/{key}:
+    get:
+      summary: Retrieve cache entry
+      operationId: getCacheEntry
+      parameters:
+        - $ref: '#/components/parameters/CacheName'
+        - $ref: '#/components/parameters/CacheKey'
+      responses:
+        '200':
+          description: Cache entry found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CacheEntryResponse'
+        '404':
+          description: Entry not found (cache miss)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      summary: Remove cache entry
+      operationId: deleteCacheEntry
+      parameters:
+        - $ref: '#/components/parameters/CacheName'
+        - $ref: '#/components/parameters/CacheKey'
+      responses:
+        '204':
+          description: Entry deleted successfully
+        '404':
+          description: Entry not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /cache/{cacheName}/entries/bulk:
+    post:
+      summary: Store multiple cache entries
+      operationId: setBulkEntries
+      parameters:
+        - $ref: '#/components/parameters/CacheName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkSetRequest'
+      responses:
+        '207':
+          description: Multi-status response for bulk operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkOperationResponse'
+
+    delete:
+      summary: Remove multiple cache entries
+      operationId: deleteBulkEntries
+      parameters:
+        - $ref: '#/components/parameters/CacheName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkDeleteRequest'
+      responses:
+        '207':
+          description: Multi-status response for bulk operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkOperationResponse'
+
+  /cache/{cacheName}/clear:
+    post:
+      summary: Clear all entries from cache
+      operationId: clearCache
+      parameters:
+        - $ref: '#/components/parameters/CacheName'
+        - name: pattern
+          in: query
+          description: Pattern for selective clearing
+          schema:
+            type: string
+        - name: tags
+          in: query
+          description: Comma-separated tags for selective clearing
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Cache cleared
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cleared_count:
+                    type: integer
+                    description: Number of entries removed
+
+  /cache/{cacheName}/statistics:
+    get:
+      summary: Get cache statistics
+      operationId: getCacheStatistics
+      parameters:
+        - $ref: '#/components/parameters/CacheName'
+      responses:
+        '200':
+          description: Cache statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatisticsResponse'
+
+components:
+  parameters:
+    CacheName:
+      name: cacheName
+      in: path
+      required: true
+      description: Name of the cache instance
+      schema:
+        type: string
+        pattern: '^[a-zA-Z0-9_-]+$'
+
+    CacheKey:
+      name: key
+      in: path
+      required: true
+      description: Cache entry key
+      schema:
+        type: string
+
+  schemas:
+    CreateCacheRequest:
+      type: object
+      required:
+        - name
+        - strategy
+      properties:
+        name:
+          type: string
+          pattern: '^[a-zA-Z0-9_-]+$'
+          description: Unique cache name
+        strategy:
+          type: string
+          enum: [lru, lfu, ttl, size, custom]
+          description: Eviction strategy
+        max_size:
+          type: integer
+          minimum: 1
+          description: Maximum number of entries
+        default_ttl:
+          type: number
+          minimum: 0
+          description: Default TTL in seconds
+        namespace:
+          type: string
+          pattern: '^[a-zA-Z0-9_-]*$'
+          description: Cache namespace
+        backend_config:
+          type: object
+          description: Backend-specific configuration
+
+    CacheResponse:
+      type: object
+      properties:
+        name:
+          type: string
+        strategy:
+          type: string
+        max_size:
+          type: integer
+        default_ttl:
+          type: number
+        namespace:
+          type: string
+        entry_count:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [active, degraded, maintenance, shutdown]
+
+    SetEntryRequest:
+      type: object
+      required:
+        - key
+        - value
+      properties:
+        key:
+          type: string
+          description: Entry key
+        value:
+          description: Entry value (any JSON type)
+        ttl:
+          type: number
+          minimum: 0
+          description: TTL in seconds
+        tags:
+          type: array
+          items:
+            type: string
+          description: Entry tags for bulk operations
+        priority:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Entry priority for eviction
+
+    CacheEntryResponse:
+      type: object
+      properties:
+        key:
+          type: string
+        value:
+          description: Entry value
+        ttl:
+          type: number
+        expires_at:
+          type: string
+          format: date-time
+        access_count:
+          type: integer
+        last_accessed:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        size_bytes:
+          type: integer
+        tags:
+          type: array
+          items:
+            type: string
+
+    BulkSetRequest:
+      type: object
+      required:
+        - entries
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/SetEntryRequest'
+        default_ttl:
+          type: number
+          minimum: 0
+
+    BulkDeleteRequest:
+      type: object
+      properties:
+        keys:
+          type: array
+          items:
+            type: string
+        pattern:
+          type: string
+          description: Key pattern for deletion
+        tags:
+          type: array
+          items:
+            type: string
+          description: Delete entries with these tags
+
+    BulkOperationResponse:
+      type: object
+      properties:
+        success_count:
+          type: integer
+        failure_count:
+          type: integer
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              key:
+                type: string
+              status:
+                type: string
+                enum: [success, error]
+              error:
+                type: string
+
+    StatisticsResponse:
+      type: object
+      properties:
+        cache_name:
+          type: string
+        hit_count:
+          type: integer
+        miss_count:
+          type: integer
+        hit_rate:
+          type: number
+          minimum: 0
+          maximum: 1
+        eviction_count:
+          type: integer
+        error_count:
+          type: integer
+        total_size_bytes:
+          type: integer
+        entry_count:
+          type: integer
+        avg_access_time_ms:
+          type: number
+        backend_status:
+          type: string
+          enum: [connected, degraded, disconnected]
+        last_reset:
+          type: string
+          format: date-time
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Error code
+        message:
+          type: string
+          description: Human-readable error message
+        details:
+          type: object
+          description: Additional error context
+        timestamp:
+          type: string
+          format: date-time

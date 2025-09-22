@@ -1,0 +1,471 @@
+openapi: 3.0.3
+info:
+  title: Event-Driven Cache Invalidation API Contract
+  version: 1.0.0
+  description: API contract for reactive cache invalidation with dependency tracking
+
+paths:
+  /cache/{cache_name}/invalidation:
+    post:
+      summary: Configure event-driven invalidation
+      parameters:
+        - name: cache_name
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvalidationConfig'
+      responses:
+        '200':
+          description: Invalidation configured successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvalidationStatus'
+
+    get:
+      summary: Get invalidation status and metrics
+      parameters:
+        - name: cache_name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Invalidation metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvalidationMetrics'
+
+  /cache/{cache_name}/dependencies:
+    post:
+      summary: Define cache entry dependencies
+      parameters:
+        - name: cache_name
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DependencyDefinition'
+      responses:
+        '200':
+          description: Dependencies configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DependencyStatus'
+
+    get:
+      summary: Get dependency graph
+      parameters:
+        - name: cache_name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: key
+          in: query
+          schema:
+            type: string
+          description: Get dependencies for specific key
+      responses:
+        '200':
+          description: Dependency graph
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DependencyGraph'
+
+  /cache/{cache_name}/invalidation/manual:
+    post:
+      summary: Manually trigger invalidation
+      parameters:
+        - name: cache_name
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ManualInvalidationRequest'
+      responses:
+        '200':
+          description: Invalidation triggered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvalidationResult'
+
+  /cache/{cache_name}/events:
+    post:
+      summary: Configure event sources
+      parameters:
+        - name: cache_name
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventSourceConfig'
+      responses:
+        '200':
+          description: Event sources configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventSourceStatus'
+
+    get:
+      summary: Get event stream status
+      parameters:
+        - name: cache_name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Event stream status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventStreamMetrics'
+
+components:
+  schemas:
+    InvalidationConfig:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          default: true
+        invalidation_strategy:
+          type: string
+          enum: ["immediate", "batched", "delayed"]
+          default: "immediate"
+        batch_size:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          default: 100
+        batch_timeout_ms:
+          type: integer
+          minimum: 100
+          maximum: 60000
+          default: 1000
+        retry_policy:
+          $ref: '#/components/schemas/RetryPolicy'
+
+    RetryPolicy:
+      type: object
+      properties:
+        max_retries:
+          type: integer
+          minimum: 0
+          maximum: 10
+          default: 3
+        retry_delay_ms:
+          type: integer
+          minimum: 100
+          maximum: 60000
+          default: 1000
+        backoff_multiplier:
+          type: number
+          minimum: 1.0
+          maximum: 10.0
+          default: 2.0
+
+    InvalidationStatus:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        strategy:
+          type: string
+        event_sources_connected:
+          type: integer
+        dependency_rules:
+          type: integer
+        last_invalidation:
+          type: string
+          format: date-time
+
+    InvalidationMetrics:
+      type: object
+      properties:
+        total_invalidations:
+          type: integer
+        successful_invalidations:
+          type: integer
+        failed_invalidations:
+          type: integer
+        cascading_invalidations:
+          type: integer
+        avg_invalidation_time_ms:
+          type: number
+        dependency_violations:
+          type: integer
+        event_processing_lag_ms:
+          type: number
+
+    DependencyDefinition:
+      type: object
+      required:
+        - dependencies
+      properties:
+        dependencies:
+          type: array
+          items:
+            $ref: '#/components/schemas/DependencyRule'
+        validation_enabled:
+          type: boolean
+          default: true
+
+    DependencyRule:
+      type: object
+      required:
+        - dependent_key
+        - dependency_keys
+      properties:
+        dependent_key:
+          type: string
+          description: Cache key that depends on others
+        dependency_keys:
+          type: array
+          items:
+            type: string
+          description: Keys this entry depends on
+        dependency_type:
+          type: string
+          enum: ["data", "computed", "derived", "business"]
+          default: "data"
+        invalidation_order:
+          type: integer
+          minimum: 1
+          default: 1
+        conditional_rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConditionalRule'
+
+    ConditionalRule:
+      type: object
+      required:
+        - condition
+        - action
+      properties:
+        condition:
+          type: string
+          description: Condition expression for invalidation
+        action:
+          type: string
+          enum: ["invalidate", "refresh", "ignore"]
+        parameters:
+          type: object
+
+    DependencyStatus:
+      type: object
+      properties:
+        total_rules:
+          type: integer
+        active_rules:
+          type: integer
+        circular_dependencies:
+          type: integer
+        validation_errors:
+          type: array
+          items:
+            type: string
+
+    DependencyGraph:
+      type: object
+      properties:
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/GraphNode'
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/GraphEdge'
+        cycles_detected:
+          type: boolean
+        max_depth:
+          type: integer
+
+    GraphNode:
+      type: object
+      properties:
+        key:
+          type: string
+        node_type:
+          type: string
+          enum: ["cache_entry", "data_source", "computed"]
+        last_modified:
+          type: string
+          format: date-time
+        invalidation_order:
+          type: integer
+
+    GraphEdge:
+      type: object
+      properties:
+        source_key:
+          type: string
+        target_key:
+          type: string
+        dependency_type:
+          type: string
+        weight:
+          type: number
+          description: Dependency strength/priority
+
+    ManualInvalidationRequest:
+      type: object
+      required:
+        - keys
+      properties:
+        keys:
+          type: array
+          items:
+            type: string
+        cascade:
+          type: boolean
+          default: true
+        force:
+          type: boolean
+          default: false
+        reason:
+          type: string
+
+    InvalidationResult:
+      type: object
+      properties:
+        invalidation_id:
+          type: string
+        keys_invalidated:
+          type: array
+          items:
+            type: string
+        cascaded_keys:
+          type: array
+          items:
+            type: string
+        failed_keys:
+          type: array
+          items:
+            type: string
+        execution_time_ms:
+          type: number
+        warnings:
+          type: array
+          items:
+            type: string
+
+    EventSourceConfig:
+      type: object
+      properties:
+        sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/EventSource'
+        global_filters:
+          type: array
+          items:
+            type: string
+
+    EventSource:
+      type: object
+      required:
+        - source_type
+        - connection_config
+      properties:
+        source_id:
+          type: string
+        source_type:
+          type: string
+          enum: ["kafka", "aws_eventbridge", "azure_eventhub", "gcp_pubsub", "webhook", "database"]
+        connection_config:
+          type: object
+          description: Source-specific connection parameters
+        topic_filters:
+          type: array
+          items:
+            type: string
+        message_format:
+          type: string
+          enum: ["json", "avro", "protobuf", "xml"]
+        transformation_rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/TransformationRule'
+
+    TransformationRule:
+      type: object
+      required:
+        - input_pattern
+        - output_mapping
+      properties:
+        rule_id:
+          type: string
+        input_pattern:
+          type: string
+          description: Pattern to match incoming events
+        output_mapping:
+          type: object
+          description: How to map event to cache operations
+        conditions:
+          type: array
+          items:
+            type: string
+
+    EventSourceStatus:
+      type: object
+      properties:
+        total_sources:
+          type: integer
+        active_sources:
+          type: integer
+        connection_errors:
+          type: integer
+        last_event_received:
+          type: string
+          format: date-time
+
+    EventStreamMetrics:
+      type: object
+      properties:
+        events_processed:
+          type: integer
+        events_failed:
+          type: integer
+        processing_rate_per_sec:
+          type: number
+        avg_processing_time_ms:
+          type: number
+        queue_depth:
+          type: integer
+        connection_status:
+          type: object
+          additionalProperties:
+            type: string
+            enum: ["connected", "disconnected", "error"]

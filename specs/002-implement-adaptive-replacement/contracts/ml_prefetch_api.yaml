@@ -1,0 +1,270 @@
+openapi: 3.0.3
+info:
+  title: ML Prefetching API Contract
+  version: 1.0.0
+  description: API contract for machine learning powered predictive prefetching
+
+paths:
+  /cache/{cache_name}/ml/prefetch:
+    post:
+      summary: Enable ML prefetching for cache
+      parameters:
+        - name: cache_name
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrefetchConfig'
+      responses:
+        '200':
+          description: ML prefetching enabled successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrefetchStatus'
+        '400':
+          description: Invalid configuration
+
+    get:
+      summary: Get ML prefetching status and predictions
+      parameters:
+        - name: cache_name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Prefetching status and metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrefetchMetrics'
+
+  /cache/{cache_name}/ml/model:
+    post:
+      summary: Trigger model retraining
+      parameters:
+        - name: cache_name
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TrainingRequest'
+      responses:
+        '202':
+          description: Training started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrainingStatus'
+
+    get:
+      summary: Get model information and accuracy
+      parameters:
+        - name: cache_name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Model information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelInfo'
+
+  /cache/{cache_name}/ml/predictions:
+    get:
+      summary: Get current prefetch predictions
+      parameters:
+        - name: cache_name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+      responses:
+        '200':
+          description: Current predictions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PredictionList'
+
+components:
+  schemas:
+    PrefetchConfig:
+      type: object
+      required:
+        - model_type
+      properties:
+        model_type:
+          type: string
+          enum: ["arima", "lstm", "transformer", "ensemble"]
+        prediction_horizon_hours:
+          type: number
+          minimum: 0.1
+          maximum: 168
+          default: 1.0
+        confidence_threshold:
+          type: number
+          minimum: 0.1
+          maximum: 1.0
+          default: 0.7
+        max_prefetch_keys:
+          type: integer
+          minimum: 1
+          maximum: 10000
+          default: 1000
+        feature_config:
+          $ref: '#/components/schemas/FeatureConfig'
+
+    FeatureConfig:
+      type: object
+      properties:
+        use_temporal_features:
+          type: boolean
+          default: true
+        use_user_context:
+          type: boolean
+          default: true
+        use_access_patterns:
+          type: boolean
+          default: true
+        custom_features:
+          type: array
+          items:
+            type: string
+
+    PrefetchStatus:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        model_type:
+          type: string
+        last_prediction:
+          type: string
+          format: date-time
+        prediction_accuracy:
+          type: number
+        prefetch_hit_rate:
+          type: number
+
+    PrefetchMetrics:
+      type: object
+      properties:
+        total_predictions:
+          type: integer
+        successful_prefetches:
+          type: integer
+        prefetch_hit_rate:
+          type: number
+        miss_reduction_percentage:
+          type: number
+        model_accuracy:
+          type: number
+        prediction_latency_ms:
+          type: number
+        last_training:
+          type: string
+          format: date-time
+
+    TrainingRequest:
+      type: object
+      properties:
+        training_data_hours:
+          type: integer
+          minimum: 24
+          maximum: 8760
+          default: 168
+        validation_split:
+          type: number
+          minimum: 0.1
+          maximum: 0.5
+          default: 0.2
+        hyperparameters:
+          type: object
+
+    TrainingStatus:
+      type: object
+      properties:
+        training_id:
+          type: string
+        status:
+          type: string
+          enum: ["started", "in_progress", "completed", "failed"]
+        progress_percentage:
+          type: number
+        estimated_completion:
+          type: string
+          format: date-time
+
+    ModelInfo:
+      type: object
+      properties:
+        model_id:
+          type: string
+        model_type:
+          type: string
+        version:
+          type: string
+        training_samples:
+          type: integer
+        validation_accuracy:
+          type: number
+        features_used:
+          type: array
+          items:
+            type: string
+        last_trained:
+          type: string
+          format: date-time
+        next_retraining:
+          type: string
+          format: date-time
+
+    PredictionList:
+      type: object
+      properties:
+        predictions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Prediction'
+        total_count:
+          type: integer
+        generated_at:
+          type: string
+          format: date-time
+
+    Prediction:
+      type: object
+      properties:
+        cache_key:
+          type: string
+        predicted_access_time:
+          type: string
+          format: date-time
+        confidence_score:
+          type: number
+        access_probability:
+          type: number
+        context_features:
+          type: object
+        prefetch_recommended:
+          type: boolean

@@ -1,0 +1,124 @@
+openapi: 3.0.3
+info:
+  title: ARC Strategy API Contract
+  version: 1.0.0
+  description: API contract for Adaptive Replacement Cache strategy operations
+
+paths:
+  /cache/{cache_name}/strategy/arc:
+    post:
+      summary: Enable ARC strategy for cache
+      parameters:
+        - name: cache_name
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ARCConfig'
+      responses:
+        '200':
+          description: ARC strategy enabled successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ARCStatus'
+        '400':
+          description: Invalid configuration
+        '404':
+          description: Cache not found
+
+    get:
+      summary: Get ARC strategy status and metrics
+      parameters:
+        - name: cache_name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ARC strategy status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ARCMetrics'
+        '404':
+          description: Cache not found or ARC not enabled
+
+components:
+  schemas:
+    ARCConfig:
+      type: object
+      required:
+        - cache_size
+      properties:
+        cache_size:
+          type: integer
+          minimum: 1
+          description: Maximum cache capacity
+        initial_p:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+          default: 0.5
+          description: Initial balance parameter
+        ghost_list_multiplier:
+          type: number
+          minimum: 1.0
+          maximum: 4.0
+          default: 2.0
+          description: Ghost list size multiplier
+
+    ARCStatus:
+      type: object
+      properties:
+        strategy_name:
+          type: string
+          enum: ["arc"]
+        enabled:
+          type: boolean
+        cache_size:
+          type: integer
+        current_p:
+          type: number
+        adaptation_rate:
+          type: number
+
+    ARCMetrics:
+      type: object
+      properties:
+        t1_size:
+          type: integer
+          description: Current T1 list size
+        t2_size:
+          type: integer
+          description: Current T2 list size
+        b1_size:
+          type: integer
+          description: Current B1 ghost list size
+        b2_size:
+          type: integer
+          description: Current B2 ghost list size
+        hit_rate_t1:
+          type: number
+          description: Hit rate from T1 list
+        hit_rate_t2:
+          type: number
+          description: Hit rate from T2 list
+        ghost_hit_rate_b1:
+          type: number
+          description: Ghost hit rate from B1
+        ghost_hit_rate_b2:
+          type: number
+          description: Ghost hit rate from B2
+        adaptation_factor:
+          type: number
+          description: Current adaptation parameter p
+        total_adaptations:
+          type: integer
+          description: Number of parameter adaptations made

@@ -453,9 +453,10 @@ class Cache:
             raise ValueError("Priority must be between 0.0 and 1.0")
 
     def _check_duplicate_name(self, name: str) -> None:
-        """Check if cache name already exists."""
-        # This will be implemented when we create the CacheRegistry
-        pass
+        """Check if cache name already exists in the global registry."""
+        from omnicache.core.registry import registry
+        if registry.exists(name):
+            raise CacheError(f"Cache with name '{name}' already exists")
 
     def _create_default_strategy(self) -> Any:
         """Create default LRU strategy."""
@@ -529,8 +530,12 @@ class Cache:
 
     def _register_cache(self) -> None:
         """Register cache in global registry."""
-        # Will be implemented when CacheRegistry is available
-        pass
+        from omnicache.core.registry import registry
+        try:
+            registry.register(self)
+        except CacheError:
+            # Already validated in _check_duplicate_name, but handle edge case
+            pass
 
     @classmethod
     def create_enterprise_cache(
@@ -614,5 +619,5 @@ class Cache:
 
     def _unregister_cache(self) -> None:
         """Unregister cache from global registry."""
-        # Will be implemented when CacheRegistry is available
-        pass
+        from omnicache.core.registry import registry
+        registry.unregister(self._name)

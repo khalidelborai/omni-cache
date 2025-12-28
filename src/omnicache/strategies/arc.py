@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, List, Set
 from enum import Enum
 import time
+import threading
 from collections import OrderedDict
 
 
@@ -115,6 +116,9 @@ class ARCStrategy:
         # Entry mapping
         self._entries: Dict[str, ARCEntry] = {}
 
+        # Thread safety lock for synchronous operations
+        self._lock = threading.RLock()
+
         # Statistics
         self.hits = 0
         self.misses = 0
@@ -205,52 +209,53 @@ class ARCStrategy:
         Returns:
             Value if found, None otherwise
         """
-        # Check T1 (recent items)
-        if key in self._t1:
-            entry = self._entries[key]
-            entry.update_access()
+        with self._lock:
+            # Check T1 (recent items)
+            if key in self._t1:
+                entry = self._entries[key]
+                entry.update_access()
 
-            # Move from T1 to T2 (promote to frequent)
-            self._t1.pop(key)
-            self._t2[key] = entry
-            entry.list_type = ARCListType.T2
+                # Move from T1 to T2 (promote to frequent)
+                self._t1.pop(key)
+                self._t2[key] = entry
+                entry.list_type = ARCListType.T2
 
-            self.hits += 1
-            self.t1_hits += 1
+                self.hits += 1
+                self.t1_hits += 1
+                self.updated_at = time.time()
+                return entry.value
+
+            # Check T2 (frequent items)
+            if key in self._t2:
+                entry = self._entries[key]
+                entry.update_access()
+
+                # Move to end (most recently used in T2)
+                self._t2.move_to_end(key)
+
+                self.hits += 1
+                self.t2_hits += 1
+                self.updated_at = time.time()
+                return entry.value
+
+            # Check B1 (ghost list for T1)
+            if key in self._b1:
+                self.b1_hits += 1
+                self._adapt_on_b1_hit()
+                # Remove from B1 (will be added to cache below)
+                self._b1.pop(key)
+
+            # Check B2 (ghost list for T2)
+            elif key in self._b2:
+                self.b2_hits += 1
+                self._adapt_on_b2_hit()
+                # Remove from B2 (will be added to cache below)
+                self._b2.pop(key)
+
+            # Cache miss
+            self.misses += 1
             self.updated_at = time.time()
-            return entry.value
-
-        # Check T2 (frequent items)
-        if key in self._t2:
-            entry = self._entries[key]
-            entry.update_access()
-
-            # Move to end (most recently used in T2)
-            self._t2.move_to_end(key)
-
-            self.hits += 1
-            self.t2_hits += 1
-            self.updated_at = time.time()
-            return entry.value
-
-        # Check B1 (ghost list for T1)
-        if key in self._b1:
-            self.b1_hits += 1
-            self._adapt_on_b1_hit()
-            # Remove from B1 (will be added to cache below)
-            self._b1.pop(key)
-
-        # Check B2 (ghost list for T2)
-        elif key in self._b2:
-            self.b2_hits += 1
-            self._adapt_on_b2_hit()
-            # Remove from B2 (will be added to cache below)
-            self._b2.pop(key)
-
-        # Cache miss
-        self.misses += 1
-        self.updated_at = time.time()
-        return None
+            return None
 
     def set(self, key: str, value: Any, ttl: Optional[float] = None) -> None:
         """
@@ -261,46 +266,47 @@ class ARCStrategy:
             value: Value to store
             ttl: Time to live (not used in ARC)
         """
-        # If already in cache, update value
-        if key in self._entries:
-            entry = self._entries[key]
-            entry.value = value
-            entry.update_access()
+        with self._lock:
+            # If already in cache, update value
+            if key in self._entries:
+                entry = self._entries[key]
+                entry.value = value
+                entry.update_access()
 
-            # Move to appropriate position
-            if key in self._t1:
-                self._t1.move_to_end(key)
-            elif key in self._t2:
-                self._t2.move_to_end(key)
+                # Move to appropriate position
+                if key in self._t1:
+                    self._t1.move_to_end(key)
+                elif key in self._t2:
+                    self._t2.move_to_end(key)
+
+                self.updated_at = time.time()
+                return
+
+            # Create new entry
+            entry = ARCEntry(key=key, value=value)
+            self._entries[key] = entry
+
+            # Check if we need to make space
+            if self.current_size >= self.max_size:
+                self._replace()
+
+            # Determine placement based on ghost list history
+            if key in self._b1:
+                # Was in B1, add to T2 (frequent)
+                self._b1.pop(key)
+                self._t2[key] = entry
+                entry.list_type = ARCListType.T2
+            elif key in self._b2:
+                # Was in B2, add to T2 (frequent)
+                self._b2.pop(key)
+                self._t2[key] = entry
+                entry.list_type = ARCListType.T2
+            else:
+                # New item, add to T1 (recent)
+                self._t1[key] = entry
+                entry.list_type = ARCListType.T1
 
             self.updated_at = time.time()
-            return
-
-        # Create new entry
-        entry = ARCEntry(key=key, value=value)
-        self._entries[key] = entry
-
-        # Check if we need to make space
-        if self.current_size >= self.max_size:
-            self._replace()
-
-        # Determine placement based on ghost list history
-        if key in self._b1:
-            # Was in B1, add to T2 (frequent)
-            self._b1.pop(key)
-            self._t2[key] = entry
-            entry.list_type = ARCListType.T2
-        elif key in self._b2:
-            # Was in B2, add to T2 (frequent)
-            self._b2.pop(key)
-            self._t2[key] = entry
-            entry.list_type = ARCListType.T2
-        else:
-            # New item, add to T1 (recent)
-            self._t1[key] = entry
-            entry.list_type = ARCListType.T1
-
-        self.updated_at = time.time()
 
     def delete(self, key: str) -> bool:
         """
@@ -312,23 +318,24 @@ class ARCStrategy:
         Returns:
             True if key was deleted, False if not found
         """
-        if key not in self._entries:
-            return False
+        with self._lock:
+            if key not in self._entries:
+                return False
 
-        entry = self._entries.pop(key)
+            entry = self._entries.pop(key)
 
-        # Remove from appropriate list
-        if key in self._t1:
-            self._t1.pop(key)
-        elif key in self._t2:
-            self._t2.pop(key)
-        elif key in self._b1:
-            self._b1.pop(key)
-        elif key in self._b2:
-            self._b2.pop(key)
+            # Remove from appropriate list
+            if key in self._t1:
+                self._t1.pop(key)
+            elif key in self._t2:
+                self._t2.pop(key)
+            elif key in self._b1:
+                self._b1.pop(key)
+            elif key in self._b2:
+                self._b2.pop(key)
 
-        self.updated_at = time.time()
-        return True
+            self.updated_at = time.time()
+            return True
 
     def _replace(self) -> None:
         """Replace an item to make space."""
@@ -400,26 +407,27 @@ class ARCStrategy:
 
     def clear(self) -> None:
         """Clear all cache entries."""
-        self._t1.clear()
-        self._t2.clear()
-        self._b1.clear()
-        self._b2.clear()
-        self._entries.clear()
+        with self._lock:
+            self._t1.clear()
+            self._t2.clear()
+            self._b1.clear()
+            self._b2.clear()
+            self._entries.clear()
 
-        # Reset adaptive parameter to 0 as expected by contract tests
-        self.target_t1_size = 0
+            # Reset adaptive parameter to 0 as expected by contract tests
+            self.target_t1_size = 0
 
-        # Reset statistics
-        self.hits = 0
-        self.misses = 0
-        self.evictions = 0
-        self.adaptations = 0
-        self.t1_hits = 0
-        self.t2_hits = 0
-        self.b1_hits = 0
-        self.b2_hits = 0
+            # Reset statistics
+            self.hits = 0
+            self.misses = 0
+            self.evictions = 0
+            self.adaptations = 0
+            self.t1_hits = 0
+            self.t2_hits = 0
+            self.b1_hits = 0
+            self.b2_hits = 0
 
-        self.updated_at = time.time()
+            self.updated_at = time.time()
 
     def reset(self) -> None:
         """Reset cache (alias for clear)."""

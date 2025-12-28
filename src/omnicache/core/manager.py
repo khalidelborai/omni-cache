@@ -46,6 +46,9 @@ class CacheManager:
         self._is_initialized = False
         self._shutdown_hooks: List[Callable] = []
 
+        # Thread safety lock for async operations
+        self._manager_lock = asyncio.Lock()
+
         # Enterprise features
         self._analytics_tracker: Optional[Any] = None
         self._security_monitor: Optional[Any] = None
@@ -142,30 +145,31 @@ class CacheManager:
             CacheError: If cache creation fails
             CacheConfigurationError: If configuration is invalid
         """
-        try:
-            # Use provided config or look up stored configuration
-            cache_config = config or self._configurations.get(name, {})
-            cache_config.update(kwargs)
+        async with self._manager_lock:
+            try:
+                # Use provided config or look up stored configuration
+                cache_config = config or self._configurations.get(name, {})
+                cache_config.update(kwargs)
 
-            # Import Cache class dynamically to avoid circular imports
-            from omnicache.models.cache import Cache
+                # Import Cache class dynamically to avoid circular imports
+                from omnicache.models.cache import Cache
 
-            # Create cache instance
-            if config:
-                cache = Cache.from_config(name, cache_config)
-            else:
-                cache = Cache(name, **cache_config)
+                # Create cache instance
+                if config:
+                    cache = Cache.from_config(name, cache_config)
+                else:
+                    cache = Cache(name, **cache_config)
 
-            # Register in registry
-            registry.register(cache)
+                # Register in registry
+                registry.register(cache)
 
-            # Initialize cache
-            await cache.initialize()
+                # Initialize cache
+                await cache.initialize()
 
-            return cache
+                return cache
 
-        except Exception as e:
-            raise CacheError(f"Failed to create cache '{name}': {str(e)}")
+            except Exception as e:
+                raise CacheError(f"Failed to create cache '{name}': {str(e)}")
 
     async def create_enterprise_cache(
         self,
@@ -389,15 +393,16 @@ class CacheManager:
         Returns:
             True if deleted, False if not found
         """
-        cache = registry.get(name)
-        if cache:
-            try:
-                await cache.shutdown()
-                return registry.unregister(name)
-            except Exception as e:
-                raise CacheError(f"Failed to delete cache '{name}': {str(e)}")
+        async with self._manager_lock:
+            cache = registry.get(name)
+            if cache:
+                try:
+                    await cache.shutdown()
+                    return registry.unregister(name)
+                except Exception as e:
+                    raise CacheError(f"Failed to delete cache '{name}': {str(e)}")
 
-        return False
+            return False
 
     def list_caches(self) -> List[Dict[str, Any]]:
         """
@@ -731,6 +736,106 @@ class CacheManager:
                 pass
 
         return stats
+
+    async def health_check(self, cache_name: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Perform health check on cache(s).
+
+        Args:
+            cache_name: Specific cache to check, or None for all caches
+
+        Returns:
+            Health status dictionary
+        """
+        timestamp = datetime.now().isoformat()
+
+        if cache_name:
+            # Single cache health check
+            cache = registry.get(cache_name)
+            if not cache:
+                return {
+                    "healthy": False,
+                    "error": f"Cache '{cache_name}' not found",
+                    "timestamp": timestamp
+                }
+
+            try:
+                backend_health = await cache.backend.health_check() if hasattr(cache.backend, 'health_check') else {"healthy": True}
+                return {
+                    "cache_name": cache_name,
+                    "healthy": backend_health.get("healthy", True),
+                    "status": cache.status,
+                    "backend": str(cache.backend),
+                    "strategy": str(cache.strategy),
+                    "details": backend_health,
+                    "timestamp": timestamp
+                }
+            except Exception as e:
+                return {
+                    "cache_name": cache_name,
+                    "healthy": False,
+                    "error": str(e),
+                    "timestamp": timestamp
+                }
+
+        # Aggregate health check for all caches
+        results = {}
+        overall_healthy = True
+
+        for name in registry.cache_names:
+            cache = registry.get(name)
+            if cache:
+                try:
+                    if hasattr(cache.backend, 'health_check'):
+                        health = await cache.backend.health_check()
+                    else:
+                        health = {"healthy": True}
+                    results[name] = {
+                        "healthy": health.get("healthy", True),
+                        "status": cache.status,
+                        "details": health
+                    }
+                    if not health.get("healthy", True):
+                        overall_healthy = False
+                except Exception as e:
+                    results[name] = {"healthy": False, "error": str(e)}
+                    overall_healthy = False
+
+        return {
+            "overall_healthy": overall_healthy,
+            "caches": results,
+            "cache_count": len(results),
+            "timestamp": timestamp
+        }
+
+    async def readiness_check(self) -> Dict[str, Any]:
+        """
+        Check if system is ready to serve requests.
+
+        Returns:
+            Readiness status dictionary
+        """
+        ready = self._is_initialized and registry.cache_count >= 0
+
+        return {
+            "ready": ready,
+            "initialized": self._is_initialized,
+            "caches_count": registry.cache_count,
+            "status": "ready" if ready else "not_ready",
+            "timestamp": datetime.now().isoformat()
+        }
+
+    async def liveness_check(self) -> Dict[str, Any]:
+        """
+        Check if system is alive (for Kubernetes probes).
+
+        Returns:
+            Liveness status dictionary
+        """
+        return {
+            "alive": True,
+            "timestamp": datetime.now().isoformat()
+        }
 
     async def get_enterprise_analytics(self, cache_name: Optional[str] = None) -> Dict[str, Any]:
         """

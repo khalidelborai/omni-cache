@@ -42,6 +42,13 @@ class RedisBackend(Backend):
         db: int = 0,
         password: Optional[str] = None,
         key_prefix: str = "omnicache:",
+        # Connection pool parameters
+        max_connections: int = 10,
+        min_connections: int = 1,
+        connection_timeout: float = 5.0,
+        socket_timeout: float = 5.0,
+        retry_on_timeout: bool = True,
+        health_check_interval: int = 30,
         **config: Any
     ) -> None:
         """
@@ -54,6 +61,12 @@ class RedisBackend(Backend):
             db: Redis database number
             password: Redis password
             key_prefix: Prefix for all cache keys
+            max_connections: Maximum connections in pool
+            min_connections: Minimum connections in pool
+            connection_timeout: Timeout for establishing connections
+            socket_timeout: Timeout for socket operations
+            retry_on_timeout: Whether to retry on timeout
+            health_check_interval: Seconds between health checks
             **config: Additional Redis configuration
         """
         if not REDIS_AVAILABLE:
@@ -82,6 +95,16 @@ class RedisBackend(Backend):
         self._redis: Optional[Redis] = None
         self._redis_config = redis_config
 
+        # Connection pool configuration
+        self._pool_config = {
+            "max_connections": max_connections,
+            "socket_timeout": socket_timeout,
+            "socket_connect_timeout": connection_timeout,
+            "retry_on_timeout": retry_on_timeout,
+            "health_check_interval": health_check_interval,
+        }
+        self._connection_pool = None
+
         # Statistics
         self._total_gets = 0
         self._total_sets = 0
@@ -90,13 +113,25 @@ class RedisBackend(Backend):
         self._total_misses = 0
 
     async def initialize(self) -> None:
-        """Initialize the Redis connection."""
+        """Initialize the Redis connection with connection pooling."""
         try:
-            # Create Redis connection
+            # Create connection pool
             if "url" in self._redis_config:
-                self._redis = redis.from_url(**self._redis_config)
+                self._connection_pool = redis.ConnectionPool.from_url(
+                    self._redis_config["url"],
+                    **self._pool_config
+                )
             else:
-                self._redis = Redis(**self._redis_config)
+                self._connection_pool = redis.ConnectionPool(
+                    host=self._redis_config.get("host", "localhost"),
+                    port=self._redis_config.get("port", 6379),
+                    db=self._redis_config.get("db", 0),
+                    password=self._redis_config.get("password"),
+                    **self._pool_config
+                )
+
+            # Create Redis client with connection pool
+            self._redis = Redis(connection_pool=self._connection_pool)
 
             # Test connection
             await self._redis.ping()
@@ -109,11 +144,15 @@ class RedisBackend(Backend):
             raise CacheBackendError(f"Redis backend initialization failed: {str(e)}")
 
     async def shutdown(self) -> None:
-        """Shutdown the Redis connection."""
+        """Shutdown the Redis connection and connection pool."""
         try:
             if self._redis:
                 await self._redis.close()
                 self._redis = None
+
+            if self._connection_pool:
+                await self._connection_pool.disconnect()
+                self._connection_pool = None
 
             await super().shutdown()
             self._clear_error()
@@ -121,6 +160,24 @@ class RedisBackend(Backend):
         except Exception as e:
             self._record_error(f"Failed to shutdown Redis: {str(e)}")
             raise CacheBackendError(f"Redis backend shutdown failed: {str(e)}")
+
+    def get_pool_stats(self) -> Dict[str, Any]:
+        """
+        Get connection pool statistics.
+
+        Returns:
+            Dictionary with pool statistics
+        """
+        if not self._connection_pool:
+            return {"pool_available": False}
+
+        return {
+            "pool_available": True,
+            "max_connections": self._pool_config.get("max_connections", 10),
+            "socket_timeout": self._pool_config.get("socket_timeout", 5.0),
+            "connection_timeout": self._pool_config.get("socket_connect_timeout", 5.0),
+            "health_check_interval": self._pool_config.get("health_check_interval", 30),
+        }
 
     async def set(
         self,

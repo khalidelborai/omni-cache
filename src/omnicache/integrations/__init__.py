@@ -62,6 +62,45 @@ from omnicache.core.patterns import (
     invalidate_by_pattern,
 )
 
+# Compression
+from omnicache.core.compression import (
+    CompressionAlgorithm,
+    CompressionConfig,
+    CompressionMiddleware,
+    CompressedCache,
+    JSONSerializer,
+    PickleSerializer,
+    ZlibCompressor,
+    GzipCompressor,
+    LzmaCompressor,
+    compressed_cache,
+)
+
+# Power features
+from omnicache.core.power import (
+    # Request coalescing
+    RequestCoalescer,
+    request_coalescer,
+    coalesce_requests,
+    # Multi-level caching
+    CacheLevel,
+    MultiLevelCache,
+    multilevel_cache,
+    # Versioning
+    VersionedCache,
+    versioned_cache,
+    # Negative caching
+    NegativeCache,
+    negative_cache,
+    # Memoization
+    LRUMemoizer,
+    memoize,
+    # Write-behind
+    WriteBehindCache,
+    # Prefetching
+    Prefetcher,
+)
+
 __all__ = [
     # === Basic Decorators ===
     "cache",
@@ -126,4 +165,44 @@ __all__ = [
     # === Locking & SWR ===
     "cache_lock",
     "swr_manager",
+
+    # === Compression ===
+    "CompressionAlgorithm",
+    "CompressionConfig",
+    "CompressionMiddleware",
+    "CompressedCache",
+    "JSONSerializer",
+    "PickleSerializer",
+    "ZlibCompressor",
+    "GzipCompressor",
+    "LzmaCompressor",
+    "compressed_cache",
+
+    # === Request Coalescing ===
+    "RequestCoalescer",
+    "request_coalescer",
+    "coalesce_requests",
+
+    # === Multi-Level Caching ===
+    "CacheLevel",
+    "MultiLevelCache",
+    "multilevel_cache",
+
+    # === Versioning ===
+    "VersionedCache",
+    "versioned_cache",
+
+    # === Negative Caching ===
+    "NegativeCache",
+    "negative_cache",
+
+    # === Memoization ===
+    "LRUMemoizer",
+    "memoize",
+
+    # === Write-Behind ===
+    "WriteBehindCache",
+
+    # === Prefetching ===
+    "Prefetcher",
 ]
